@@ -1,4 +1,4 @@
-# LocalPDF Studio
+# Aether
 
 A desktop-class PDF editor that matches the everyday Adobe Acrobat Pro toolset and runs entirely on your
 computer. Documents never leave the machine: the API binds to `127.0.0.1`, rejects non-local `Host` headers,
