@@ -1,7 +1,7 @@
 """Operation registry.
 
 Every editing feature is a named operation that mutates an open document.
-The HTTP API, batch "Action Wizard" recipes and (later) the local AI assistant
+The HTTP API, batch "Action Wizard" recipes and the local AI assistant
 all go through this one registry, so they can only do what the editor can do.
 """
 
@@ -14,7 +14,7 @@ from typing import Any
 import pymupdf as fitz
 from pydantic import validate_call
 
-from ..store import DocEntry, DocumentStore
+from ..store import DocEntry, DocumentStore, StoreError
 
 
 @dataclass
@@ -62,6 +62,30 @@ def page_list(doc: fitz.Document, pages: list[int] | None) -> list[int]:
     if bad:
         raise ValueError(f"Page index out of range: {bad}")
     return list(dict.fromkeys(pages))
+
+
+def run_op(store: DocumentStore, doc_id: str, name: str, params: dict[str, Any]) -> Any:
+    """Apply one operation to an open document and commit the result as an undo step."""
+    spec = OPS.get(name)
+    if spec is None:
+        raise StoreError(f"Unknown operation {name!r}", 404)
+    entry = store.get(doc_id)
+    with entry.lock:
+        doc = entry.open()
+        try:
+            result = spec.fn(doc, Ctx(store, entry), **params)
+            new_passwords: list[str] = []
+            if isinstance(result, OpResult):
+                data, new_bytes, new_passwords = result.data, result.replace_bytes, result.new_passwords
+            else:
+                data, new_bytes = result, None
+            if new_bytes is None:
+                new_bytes = entry.serialize(doc)
+        finally:
+            doc.close()
+        entry.commit(new_bytes)
+        entry.passwords.extend(p for p in new_passwords if p not in entry.passwords)
+    return data
 
 
 # Import modules for their registration side effects.

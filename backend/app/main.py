@@ -1,4 +1,6 @@
-"""LocalPDF Studio API. Serves only 127.0.0.1; documents never leave this process."""
+"""LocalPDF Studio API. Serves only 127.0.0.1; documents never leave this process.
+
+The only outbound connection is a model download the user starts (see ai/models.py)."""
 
 from __future__ import annotations
 
@@ -13,9 +15,11 @@ from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ValidationError
 
-from . import convert
+from . import convert, ops
+from .ai import index as ai_index
+from .ai.routes import build_router as build_ai_router
 from .inspect_doc import doc_info, page_detail, search
-from .ops import OPS, Ctx, OpResult
+from .ops import OPS
 from .ops.certs import create_digital_id, validate_signatures
 from .store import DocumentStore, StoreError
 
@@ -119,6 +123,7 @@ def get_document(doc_id: str):
 @app.delete("/api/documents/{doc_id}")
 def close_document(doc_id: str):
     store.close(doc_id)
+    ai_index.forget(doc_id)
     return {"ok": True}
 
 
@@ -200,26 +205,7 @@ def redo(doc_id: str):
 
 
 def run_op(doc_id: str, name: str, params: dict[str, Any]) -> Any:
-    spec = OPS.get(name)
-    if spec is None:
-        raise StoreError(f"Unknown operation {name!r}", 404)
-    entry = store.get(doc_id)
-    with entry.lock:
-        doc = entry.open()
-        try:
-            result = spec.fn(doc, Ctx(store, entry), **params)
-            new_passwords: list[str] = []
-            if isinstance(result, OpResult):
-                data, new_bytes, new_passwords = result.data, result.replace_bytes, result.new_passwords
-            else:
-                data, new_bytes = result, None
-            if new_bytes is None:
-                new_bytes = entry.serialize(doc)
-        finally:
-            doc.close()
-        entry.commit(new_bytes)
-        entry.passwords.extend(p for p in new_passwords if p not in entry.passwords)
-    return data
+    return ops.run_op(store, doc_id, name, params)
 
 
 @app.post("/api/documents/{doc_id}/ops/{name}")
@@ -413,6 +399,8 @@ def digital_id(body: DigitalIdBody):
 
 
 # --------------------------------------------------------------- frontend --
+
+app.include_router(build_ai_router(store))
 
 DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if DIST.is_dir():

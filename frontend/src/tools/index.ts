@@ -1,4 +1,5 @@
 import type { Tool, ToolGroup } from '../editor'
+import { assistantGroup } from './assistant'
 import { commentGroup, stampGroup } from './comment'
 import {
   accessibilityGroup, actionsGroup, combineGroup, compareGroup, createGroup, exportGroup, measureGroup,
@@ -10,7 +11,7 @@ import { certificatesGroup, protectGroup, redactGroup } from './protect'
 
 /** Tool groups, named after the Acrobat Pro tools they replace. */
 export const GROUPS: ToolGroup[] = [
-  editGroup, commentGroup, organizeGroup, combineGroup, createGroup, exportGroup,
+  assistantGroup, editGroup, commentGroup, organizeGroup, combineGroup, createGroup, exportGroup,
   fillSignGroup, formsGroup, protectGroup, redactGroup, ocrGroup, enhanceGroup,
   compareGroup, optimizeGroup, stampGroup, certificatesGroup, measureGroup,
   accessibilityGroup, actionsGroup, propertiesGroup,

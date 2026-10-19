@@ -120,6 +120,8 @@ export function TopBar({ onOpen, onSave }: { onOpen: () => void; onSave: (as: bo
         {ed.hits.length > 0 && <button className="small" onClick={() => { setQuery(''); ed.setHits([]) }}>×</button>}
       </div>
       <div className="group">
+        <button className={ed.group === 'assistant' ? 'active' : ''} disabled={!info} title="Ask questions or request edits (runs locally)"
+          onClick={() => { ed.setGroup(ed.group === 'assistant' ? null : 'assistant'); ed.setTool(null) }}>✦ Ask AI</button>
         <button onClick={readAloud} disabled={!info} title="Read the current page aloud (local voice)">
           {speaking ? '⏹ Stop' : '🔊 Read'}
         </button>

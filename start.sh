@@ -5,7 +5,14 @@ cd "$(dirname "$0")"
 
 if [ ! -x backend/.venv/bin/python ]; then
   python3 -m venv backend/.venv
-  backend/.venv/bin/pip install -q -r backend/requirements.txt
+fi
+# (Re)install when the venv is new or predates the local AI runtime.
+if ! backend/.venv/bin/python -c "import fastapi, llama_cpp" 2>/dev/null; then
+  # Prebuilt llama.cpp wheels (Metal on Apple Silicon, CPU elsewhere) so no compiler is needed;
+  # pip falls back to building from source if no wheel matches.
+  if [ "$(uname -s)" = "Darwin" ]; then WHEELS=metal; else WHEELS=cpu; fi
+  backend/.venv/bin/pip install -q -r backend/requirements.txt \
+    --extra-index-url "https://abetlen.github.io/llama-cpp-python/whl/${WHEELS}"
 fi
 if [ ! -f frontend/dist/index.html ]; then
   npm --prefix frontend install

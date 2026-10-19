@@ -36,6 +36,8 @@ class DocEntry:
     lock: threading.Lock = field(default_factory=threading.Lock)
     version: int = 0
     dirty: bool = False
+    # Commits made since begin_group(); None when no group is open.
+    group_commits: int | None = None
 
     def open(self) -> fitz.Document:
         doc = fitz.open(stream=self.data, filetype="pdf")
@@ -121,6 +123,20 @@ class DocEntry:
         self.data = new_data
         self.version += 1
         self.dirty = True
+        if self.group_commits is not None:
+            self.group_commits += 1
+
+    def begin_group(self) -> None:
+        """Start collecting commits into one undo step (an assistant turn)."""
+        self.group_commits = 0
+
+    def end_group(self) -> None:
+        """Collapse the commits since begin_group() so a single undo reverts them all."""
+        n, self.group_commits = self.group_commits, None
+        if n and n > 1:
+            # The last n undo entries are the states before each commit; keep the oldest.
+            n = min(n, len(self.undo))
+            del self.undo[len(self.undo) - n + 1:]
 
 
 class DocumentStore:

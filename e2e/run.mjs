@@ -240,6 +240,19 @@ try {
   await sleep(800)
   check('search highlights hits', (await page.$$('.search-hit')).length > 0)
 
+  // Local assistant: only when a model has been downloaded (see docs/AI.md).
+  if (!(await api('/api/ai/models')).active) {
+    console.log('SKIP assistant (no model downloaded)')
+  } else {
+    await openGroup('Ask AI')
+    await page.type('.chat-input textarea', 'What is this document about?')
+    await page.keyboard.press('Enter')
+    await page.waitForSelector('.chat-msg.assistant:not([data-pending])', { timeout: 180_000 })
+    const answer = await page.$eval('.chat-msg.assistant', (e) => e.textContent ?? '')
+    check('assistant answers locally', answer.trim().length > 0 && !(await page.$('.chat-error')), answer.slice(0, 80))
+    await shot('06-assistant')
+  }
+
   // Save As to disk.
   await page.click('.topbar button:nth-of-type(3)')
   await fillPrompt([OUT])

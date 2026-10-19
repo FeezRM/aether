@@ -131,3 +131,69 @@ export interface BatchResult {
   ok: boolean
   error?: string
 }
+
+// ------------------------------------------------------------- assistant --
+
+export interface ModelTier {
+  id: string
+  label: string
+  description: string
+  size: number
+  installed: boolean
+  active: boolean
+  download: { state: 'downloading' | 'done' | 'error' | 'cancelled'; received: number; total: number; error: string | null } | null
+}
+
+export interface ModelStatus {
+  tiers: ModelTier[]
+  recommended: string
+  ram: number
+  active: string | null
+  runtime: boolean
+}
+
+export type ChatEvent =
+  | { type: 'start'; turn: string }
+  | { type: 'route'; category: string }
+  | { type: 'token'; text: string }
+  | { type: 'tool_call'; tool: string; args: Record<string, unknown>; text: string }
+  | { type: 'tool_result'; tool: string; ok: boolean; text?: string; result?: unknown }
+  | { type: 'confirm'; turn: string; text: string; tool: string; args: Record<string, unknown> }
+  | { type: 'doc_changed'; info: DocInfo }
+  | { type: 'citations'; citations: SearchHit[] }
+  | { type: 'done'; changed: boolean }
+  | { type: 'error'; text: string }
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+export const ai = {
+  models: () => json<ModelStatus>('/api/ai/models'),
+  download: (tier: string) => post<ModelStatus>(`/api/ai/models/${tier}/download`),
+  cancel: (tier: string) => post<ModelStatus>(`/api/ai/models/${tier}/cancel`),
+  activate: (tier: string) => post<ModelStatus>(`/api/ai/models/${tier}/activate`),
+  remove: (tier: string) => json<ModelStatus>(`/api/ai/models/${tier}`, { method: 'DELETE' }),
+  confirm: (turn: string, approve: boolean) => post(`/api/ai/chat/${turn}/confirm`, { approve }),
+  /** Run one assistant turn, calling onEvent for each server-sent event as it arrives. */
+  async chat(docId: string, message: string, history: ChatTurn[], onEvent: (e: ChatEvent) => void) {
+    const res = await check(await fetch('/api/ai/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ doc_id: docId, message, history }),
+    }))
+    const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader()
+    let buffer = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buffer += value
+      let end
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const frame = buffer.slice(0, end)
+        buffer = buffer.slice(end + 2)
+        if (frame.startsWith('data: ')) onEvent(JSON.parse(frame.slice(6)) as ChatEvent)
+      }
+    }
+  },
+}

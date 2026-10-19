@@ -68,3 +68,27 @@ def op(client, doc_id, name, /, **params):
 def current(client, doc_id) -> fitz.Document:
     r = client.get(f"/api/documents/{doc_id}/file")
     return fitz.open(stream=r.content, filetype="pdf")
+
+
+LOOPBACK = ("127.0.0.1", "::1", "localhost")
+
+
+@pytest.fixture
+def no_network(monkeypatch):
+    """Fail any connection that leaves this machine."""
+    import socket
+
+    real_connect, real_create = socket.socket.connect, socket.create_connection
+
+    def connect(self, address):
+        if self.family != socket.AF_UNIX and address[0] not in LOOPBACK:
+            raise AssertionError(f"Outbound connection attempted to {address!r}")
+        return real_connect(self, address)
+
+    def create_connection(address, *args, **kwargs):
+        if address[0] not in LOOPBACK:
+            raise AssertionError(f"Outbound connection attempted to {address!r}")
+        return real_create(address, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", connect)
+    monkeypatch.setattr(socket, "create_connection", create_connection)
