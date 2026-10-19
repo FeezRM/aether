@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Start LocalPDF Studio: one local process serving the API and the built UI on 127.0.0.1.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+if [ ! -x backend/.venv/bin/python ]; then
+  python3 -m venv backend/.venv
+  backend/.venv/bin/pip install -q -r backend/requirements.txt
+fi
+if [ ! -f frontend/dist/index.html ]; then
+  npm --prefix frontend install
+  npm --prefix frontend run build
+fi
+
+PORT="${LOCALPDF_PORT:-8765}"
+echo "LocalPDF Studio: http://127.0.0.1:${PORT}  (documents never leave this computer)"
+exec backend/.venv/bin/python -m uvicorn --app-dir backend app.main:app --host 127.0.0.1 --port "$PORT"
